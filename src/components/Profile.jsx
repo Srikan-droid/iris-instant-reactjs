@@ -22,53 +22,105 @@ function Profile({ user }) {
     phone: ''
   });
 
-  // Initialize profile data based on user type
+  // Helper function to get storage key for profile data
+  const getProfileStorageKey = (userEmail) => {
+    return `profile_data_${userEmail}`;
+  };
+
+  // Helper function to save profile data to localStorage
+  const saveProfileData = (data) => {
+    if (user) {
+      const userEmail = getUserEmail();
+      const storageKey = getProfileStorageKey(userEmail);
+      localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+  };
+
+  // Helper function to load profile data from localStorage
+  const loadProfileData = () => {
+    if (user) {
+      const userEmail = getUserEmail();
+      const storageKey = getProfileStorageKey(userEmail);
+      const savedData = localStorage.getItem(storageKey);
+      if (savedData) {
+        try {
+          return JSON.parse(savedData);
+        } catch (error) {
+          console.error('Error parsing saved profile data:', error);
+          localStorage.removeItem(storageKey);
+        }
+      }
+    }
+    return null;
+  };
+
+  // Helper function to get user email
+  const getUserEmail = () => {
+    if (!user) return '';
+    if (user.user === 'guest') return user.email;
+    if (user.user === 'gmail') return 'user@gmail.com';
+    if (user.user === 'outlook') return 'user@outlook.com';
+    if (user.user === 'password') return user.email;
+    return 'user@gmail.com';
+  };
+
+  // Initialize profile data based on user type and saved data
   useEffect(() => {
     if (user) {
-      if (user.user === 'gmail') {
-        setProfileData({
-          fullName: 'Rachel McAdams', // Mock Gmail user name
-          email: 'notebookchick@gmail.com', // Mock Gmail email
+      // First, try to load saved profile data
+      const savedData = loadProfileData();
+      
+      if (savedData) {
+        // Use saved data if available
+        setProfileData(savedData);
+        setTempValues(savedData);
+      } else {
+        // Use default mock data based on user type
+        let defaultData = {
+          fullName: '',
+          email: '',
           phone: '123-456-7890'
-        });
-        setTempValues({
-          fullName: 'Rachel McAdams',
-          email: 'notebookchick@gmail.com',
-          phone: '123-456-7890'
-        });
-      } else if (user.user === 'outlook') {
-        setProfileData({
-          fullName: 'John Smith', // Mock Outlook user name
-          email: 'john.smith@outlook.com', // Mock Outlook email
-          phone: '123-456-7890'
-        });
-        setTempValues({
-          fullName: 'John Smith',
-          email: 'john.smith@outlook.com',
-          phone: '123-456-7890'
-        });
-      } else if (user.user === 'password') {
-        setProfileData({
-          fullName: 'User Account', // Mock password user name
-          email: user.email || '',
-          phone: '123-456-7890'
-        });
-        setTempValues({
-          fullName: 'User Account',
-          email: user.email || '',
-          phone: '123-456-7890'
-        });
-      } else if (user.user === 'guest') {
-        setProfileData({
-          fullName: user.name || '',
-          email: user.email || '',
-          phone: '123-456-7890'
-        });
-        setTempValues({
-          fullName: user.name || '',
-          email: user.email || '',
-          phone: '123-456-7890'
-        });
+        };
+
+        if (user.user === 'gmail') {
+          defaultData = {
+            fullName: 'Rachel McAdams',
+            email: 'notebookchick@gmail.com',
+            phone: '123-456-7890'
+          };
+        } else if (user.user === 'outlook') {
+          defaultData = {
+            fullName: 'John Smith',
+            email: 'john.smith@outlook.com',
+            phone: '123-456-7890'
+          };
+        } else if (user.user === 'password') {
+          defaultData = {
+            fullName: 'User Account',
+            email: user.email || '',
+            phone: '123-456-7890'
+          };
+        } else if (user.user === 'guest') {
+          defaultData = {
+            fullName: user.name || '',
+            email: user.email || '',
+            phone: '123-456-7890'
+          };
+        }
+
+        setProfileData(defaultData);
+        setTempValues(defaultData);
+        
+        // Save the default data to localStorage
+        saveProfileData(defaultData);
+      }
+
+      // Load saved profile image
+      const userEmail = getUserEmail();
+      const imageStorageKey = `profile_image_${userEmail}`;
+      const savedImage = localStorage.getItem(imageStorageKey);
+      if (savedImage) {
+        setProfileImage(savedImage);
       }
     }
   }, [user]);
@@ -79,8 +131,12 @@ function Profile({ user }) {
   };
 
   const handleSave = (field) => {
-    setProfileData(prev => ({ ...prev, [field]: tempValues[field] }));
+    const updatedProfileData = { ...profileData, [field]: tempValues[field] };
+    setProfileData(updatedProfileData);
     setEditing(prev => ({ ...prev, [field]: false }));
+    
+    // Save the updated profile data to localStorage
+    saveProfileData(updatedProfileData);
   };
 
   const handleCancel = (field) => {
@@ -115,7 +171,15 @@ function Profile({ user }) {
 
       const reader = new FileReader();
       reader.onload = (e) => {
-        setProfileImage(e.target.result);
+        const imageData = e.target.result;
+        setProfileImage(imageData);
+        
+        // Save profile image to localStorage
+        if (user) {
+          const userEmail = getUserEmail();
+          const imageStorageKey = `profile_image_${userEmail}`;
+          localStorage.setItem(imageStorageKey, imageData);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -129,6 +193,13 @@ function Profile({ user }) {
     setProfileImage(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    
+    // Remove profile image from localStorage
+    if (user) {
+      const userEmail = getUserEmail();
+      const imageStorageKey = `profile_image_${userEmail}`;
+      localStorage.removeItem(imageStorageKey);
     }
   };
 
