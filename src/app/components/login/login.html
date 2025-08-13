@@ -1,0 +1,32 @@
+<div class="login-bg">
+  <form class="login-box" [formGroup]="loginForm" (ngSubmit)="handleGuestLogin()">
+    <img src="assets/images/iris inst logo.png" alt="iRIS Instant Logo" class="login-logo" />
+    <div class="login-title">AI Powered XBRL Generation</div>
+    
+    <button type="button" class="login-gmail" (click)="handleGmailLogin()">
+      Login with Gmail
+    </button>
+    
+    <div class="login-or">or continue as guest</div>
+    
+    <input
+      type="text"
+      placeholder="Your Full Name"
+      formControlName="name"
+      required
+    />
+    
+    <input
+      type="email"
+      placeholder="Your Email Address"
+      formControlName="email"
+      required
+    />
+    
+    <button type="submit" class="login-guest" [disabled]="!loginForm.valid">
+      Continue as Guest
+    </button>
+  </form>
+  
+  <div class="login-bg-title">AI Powered XBRL Generation</div>
+</div> 
