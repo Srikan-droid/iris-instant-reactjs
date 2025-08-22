@@ -1,7 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import FileStatusRow from './FileStatusRow';
+import { getSharedWithMe, getSharedByMe } from '../api';
 
-function FilingHistory({ history, onDownload }) {
+function FilingHistory({ history, onDownload, onShare, userEmail }) {
+  const [activeTab, setActiveTab] = useState('fileHistory');
+  const [sharedWithMe, setSharedWithMe] = useState([]);
+  const [sharedByMe, setSharedByMe] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -14,6 +18,26 @@ function FilingHistory({ history, onDownload }) {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // Load shared files data
+  useEffect(() => {
+    const loadSharedFiles = async () => {
+      try {
+        const [withMe, byMe] = await Promise.all([
+          getSharedWithMe(userEmail),
+          getSharedByMe(userEmail)
+        ]);
+        setSharedWithMe(withMe);
+        setSharedByMe(byMe);
+      } catch (error) {
+        console.error('Error loading shared files:', error);
+      }
+    };
+
+    if (userEmail) {
+      loadSharedFiles();
+    }
+  }, [userEmail]);
 
   // Generate a unique 6-digit request ID for each file (deterministic for demo)
   const getRequestId = (id) => {
@@ -35,7 +59,9 @@ function FilingHistory({ history, onDownload }) {
 
   // Filter history based on all filters
   const filteredHistory = useMemo(() => {
-    return history.filter(item => {
+    const dataToFilter = activeTab === 'fileHistory' ? history : sharedWithMe.map(share => share.fileDetails);
+    
+    return dataToFilter.filter(item => {
       const requestId = getRequestId(item.id);
       const uploadDate = new Date(item.date);
       const searchLower = filters.search.toLowerCase();
@@ -79,7 +105,7 @@ function FilingHistory({ history, onDownload }) {
 
       return true;
     });
-  }, [history, filters]);
+  }, [history, sharedWithMe, activeTab, filters]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
@@ -87,10 +113,10 @@ function FilingHistory({ history, onDownload }) {
   const endIndex = startIndex + itemsPerPage;
   const currentHistory = filteredHistory.slice(startIndex, endIndex);
 
-  // Reset to first page when filters change
+  // Reset to first page when filters change or tab changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [filters]);
+  }, [filters, activeTab]);
 
   const handleFilterChange = (filterName, value) => {
     setFilters(prev => ({
@@ -156,7 +182,7 @@ function FilingHistory({ history, onDownload }) {
   };
 
   // Mobile-friendly card layout component
-  const MobileFileCard = ({ item, requestId }) => (
+  const MobileFileCard = ({ item, requestId, sharedInfo, onShare }) => (
     <div className="mobile-file-card">
       <div className="mobile-card-header">
         <div className="mobile-request-id">{requestId}</div>
@@ -179,6 +205,12 @@ function FilingHistory({ history, onDownload }) {
           <span className="mobile-label">Uploaded:</span>
           <span className="mobile-value">{new Date(item.date).toLocaleDateString()}</span>
         </div>
+        {sharedInfo && (
+          <div className="mobile-info-row">
+            <span className="mobile-label">Shared by:</span>
+            <span className="mobile-value">{sharedInfo.fromUserEmail}</span>
+          </div>
+        )}
         {item.details.description && (
           <div className="mobile-info-row">
             <span className="mobile-label">Description:</span>
@@ -211,6 +243,21 @@ function FilingHistory({ history, onDownload }) {
         >
           WebForm
         </button>
+        {!sharedInfo && (
+          <button
+            className="share-btn"
+            onClick={() => {
+              // For mobile, we'll use a simple prompt for now
+              const email = prompt('Enter email address to share with:');
+              if (email && email.trim()) {
+                onShare(item.id, email.trim());
+              }
+            }}
+            title="Share this file"
+          >
+            📤 Share
+          </button>
+        )}
       </div>
     </div>
   );
@@ -263,7 +310,20 @@ function FilingHistory({ history, onDownload }) {
   return (
     <div className="filing-history">
       <div className="filing-history-header">
-        <h2>File History</h2>
+        <div className="tab-container">
+          <button 
+            className={`tab-button ${activeTab === 'fileHistory' ? 'active' : ''}`}
+            onClick={() => setActiveTab('fileHistory')}
+          >
+            File History
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'reviewHistory' ? 'active' : ''}`}
+            onClick={() => setActiveTab('reviewHistory')}
+          >
+            Review History
+          </button>
+        </div>
         <button 
           onClick={toggleFilters}
           className={`filter-toggle-btn ${showFilters ? 'active' : ''}`}
@@ -355,7 +415,7 @@ function FilingHistory({ history, onDownload }) {
           
           {hasActiveFilters && (
             <div className="filter-summary">
-              <span>Showing {filteredHistory.length} of {history.length} records</span>
+              <span>Showing {filteredHistory.length} of {activeTab === 'fileHistory' ? history.length : sharedWithMe.length} records</span>
             </div>
           )}
         </div>
@@ -363,9 +423,10 @@ function FilingHistory({ history, onDownload }) {
 
       {/* Desktop Table View */}
       <div className="desktop-table-view">
-        <table>
+        <table className="filing-history">
           <thead>
             <tr>
+              <th>S.No.</th>
               <th>Company Name</th>
               <th>File Name</th>
               <th>Request ID</th>
@@ -373,24 +434,40 @@ function FilingHistory({ history, onDownload }) {
               <th>Uploaded On</th>
               <th>View</th>
               <th>Download</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {currentHistory.length === 0 ? (
               <tr>
-                <td colSpan="7">
-                  {hasActiveFilters ? 'No records match the current filters.' : 'No filings yet.'}
+                <td colSpan="9">
+                  {hasActiveFilters ? 'No records match the current filters.' : `No ${activeTab === 'fileHistory' ? 'filings' : 'shared files'} yet.`}
                 </td>
               </tr>
             ) : (
-              currentHistory.map(item => (
-                <FileStatusRow
-                  key={item.id}
-                  item={item}
-                  onDownload={onDownload}
-                  requestId={getRequestId(item.id)}
-                />
-              ))
+              currentHistory.map((item, index) => {
+                const sharedRecord = activeTab === 'reviewHistory' 
+                  ? sharedWithMe.find(share => share.fileDetails.id === item.id)
+                  : null;
+                
+                // Extract the sharing metadata from the shared record
+                const sharedInfo = sharedRecord ? {
+                  fromUserEmail: sharedRecord.fromUserEmail,
+                  sharedAt: sharedRecord.sharedAt
+                } : null;
+                
+                return (
+                  <FileStatusRow
+                    key={item.id}
+                    item={item}
+                    onDownload={onDownload}
+                    onShare={onShare}
+                    requestId={getRequestId(item.id)}
+                    serialNumber={startIndex + index + 1}
+                    sharedInfo={sharedInfo}
+                  />
+                );
+              })
             )}
           </tbody>
         </table>
@@ -400,16 +477,30 @@ function FilingHistory({ history, onDownload }) {
       <div className="mobile-card-view">
         {currentHistory.length === 0 ? (
           <div className="mobile-empty-state">
-            {hasActiveFilters ? 'No records match the current filters.' : 'No filings yet.'}
+            {hasActiveFilters ? 'No records match the current filters.' : `No ${activeTab === 'fileHistory' ? 'filings' : 'shared files'} yet.`}
           </div>
         ) : (
-          currentHistory.map(item => (
-            <MobileFileCard
-              key={item.id}
-              item={item}
-              requestId={getRequestId(item.id)}
-            />
-          ))
+          currentHistory.map(item => {
+            const sharedRecord = activeTab === 'reviewHistory' 
+              ? sharedWithMe.find(share => share.fileDetails.id === item.id)
+              : null;
+            
+            // Extract the sharing metadata from the shared record
+            const sharedInfo = sharedRecord ? {
+              fromUserEmail: sharedRecord.fromUserEmail,
+              sharedAt: sharedRecord.sharedAt
+            } : null;
+            
+                         return (
+               <MobileFileCard
+                 key={item.id}
+                 item={item}
+                 requestId={getRequestId(item.id)}
+                 sharedInfo={sharedInfo}
+                 onShare={onShare}
+               />
+             );
+          })
         )}
       </div>
 

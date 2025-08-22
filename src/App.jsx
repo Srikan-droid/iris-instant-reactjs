@@ -3,7 +3,7 @@ import UploadForm from './components/UploadForm';
 import FilingHistory from './components/FilingHistory';
 import Login from './components/Login';
 import Profile from './components/Profile';
-import { fetchFilingHistory, uploadFiling, downloadFile, clearUserData } from './api';
+import { fetchFilingHistory, uploadFiling, downloadFile, clearUserData, shareFile } from './api';
 import './App.css';
 
 const mandates = ["ACFR", "SBC", "MBRS"];
@@ -125,6 +125,13 @@ function App() {
     await downloadFile(id, userEmail);
   };
 
+  const handleShare = async (fileId, toEmail) => {
+    const userEmail = getUserEmail();
+    await shareFile(fileId, userEmail, toEmail);
+    // Refresh the history to show updated share information
+    setRefresh(r => !r);
+  };
+
   const handleLogout = () => {
     // Only clear user-specific data for guest users, preserve authenticated user data
     if (user && user.user === 'guest') {
@@ -200,7 +207,12 @@ function App() {
       {view === 'history' && (
         <>
           <div className="ai-powered-title gradient-text">AI Powered XBRL Generation</div>
-          <FilingHistory history={history} onDownload={handleDownload} />
+          <FilingHistory 
+            history={history} 
+            onDownload={handleDownload} 
+            onShare={handleShare}
+            userEmail={getUserEmail()}
+          />
         </>
       )}
       {view === 'profile' && (

@@ -3,6 +3,10 @@ function getStorageKey(userEmail) {
   return `filing_history_${userEmail}`;
 }
 
+function getSharedFilesKey() {
+  return 'shared_files';
+}
+
 function getHistory(userEmail) {
   const storageKey = getStorageKey(userEmail);
   return JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -11,6 +15,14 @@ function getHistory(userEmail) {
 function setHistory(history, userEmail) {
   const storageKey = getStorageKey(userEmail);
   localStorage.setItem(storageKey, JSON.stringify(history));
+}
+
+function getSharedFiles() {
+  return JSON.parse(localStorage.getItem(getSharedFilesKey()) || '[]');
+}
+
+function setSharedFiles(sharedFiles) {
+  localStorage.setItem(getSharedFilesKey(), JSON.stringify(sharedFiles));
 }
 
 export async function uploadFiling(details, file, userEmail) {
@@ -71,6 +83,67 @@ export async function downloadFile(id, userEmail) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 100);
+}
+
+export async function shareFile(fileId, fromUserEmail, toUserEmail) {
+  try {
+    const history = getHistory(fromUserEmail);
+    const file = history.find(item => item.id === fileId);
+    
+    if (!file) {
+      throw new Error('File not found');
+    }
+    
+    const sharedFiles = getSharedFiles();
+    const shareId = Date.now().toString();
+    
+    const sharedFile = {
+      id: shareId,
+      fileId: fileId,
+      fromUserEmail: fromUserEmail,
+      toUserEmail: toUserEmail,
+      sharedAt: new Date().toISOString(),
+      fileDetails: {
+        ...file,
+        sharedBy: fromUserEmail,
+        sharedAt: new Date().toISOString()
+      }
+    };
+    
+    setSharedFiles([sharedFile, ...sharedFiles]);
+    
+    // Update the original file's shares information
+    const updatedHistory = history.map(item => {
+      if (item.id === fileId) {
+        const existingShares = item.shares || [];
+        return {
+          ...item,
+          shares: [...existingShares, {
+            toUserEmail: toUserEmail,
+            sharedAt: new Date().toISOString()
+          }]
+        };
+      }
+      return item;
+    });
+    
+    setHistory(updatedHistory, fromUserEmail);
+    
+    return Promise.resolve(sharedFile);
+  } catch (error) {
+    console.error('Share file error:', error);
+    throw error;
+  }
+}
+
+export async function getSharedWithMe(userEmail) {
+  const sharedFiles = getSharedFiles();
+  return sharedFiles.filter(share => share.toUserEmail === userEmail);
+}
+
+export async function getSharedByMe(userEmail) {
+  const sharedFiles = getSharedFiles();
+  return sharedFiles.filter(share => share.fromUserEmail === userEmail);
 }
 
 // Function to clear user data (for logout)
